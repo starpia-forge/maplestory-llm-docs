@@ -11,6 +11,7 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/chromedp"
+	"maplestory-llm-docs/internal/logger"
 )
 
 // StartURL is the initial page to begin crawling.
@@ -125,9 +126,13 @@ func Run(headless bool, outPath, format string, clickDelay time.Duration, limit 
 				continue
 			}
 
-			docs = append(docs, Doc{PostID: postID, Title: title, URL: curURL, Content: html})
+			doc := Doc{PostID: postID, Title: title, URL: curURL, Content: html}
+			docs = append(docs, doc)
 			visited[postID] = true
 			foundNew = true
+
+			// info log for each newly parsed document
+			logger.LogParsedDoc(nil, doc.PostID, doc.Title, doc.URL)
 
 			if limit > 0 && len(visited) >= limit {
 				break

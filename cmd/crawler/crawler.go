@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"log"
+	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -26,6 +28,10 @@ func main() {
 	flag.IntVar(&limit, "limit", 0, "max number of documents to crawl (0 = no limit)")
 	flag.DurationVar(&timeout, "timeout", 120*time.Second, "overall timeout for crawling")
 	flag.Parse()
+
+	// Configure default slog logger (text to stderr, Info level)
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
+	slog.SetDefault(slog.New(handler))
 
 	if err := crawler.Run(head, out, strings.ToLower(format), delay, limit, timeout); err != nil {
 		log.Fatalf("crawler error: %v", err)
