@@ -15,7 +15,7 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// StartURL is the initial page to begin crawling.
+// StartURL is the default initial page to begin crawling.
 const StartURL = "https://maplestoryworlds-creators.nexon.com/ko/docs/?postId=472"
 
 const (
@@ -27,8 +27,33 @@ const (
 	titleSel            = "#App > main > div.contents_wrap > div.renderContent h1"
 )
 
-// Run executes the crawl with the provided configuration and writes results to outPath.
-func Run(headless bool, outPath, format string, clickDelay time.Duration, limit int, overallTimeout time.Duration) error {
+// Crawler는 실행마다 반복 전달하던 설정값을 보관해 재사용하기 위한 구조체입니다.
+type Crawler struct {
+	ClickDelay     time.Duration
+	Limit          int
+	OverallTimeout time.Duration
+}
+
+// NewCrawler는 주어진 설정으로 Crawler 인스턴스를 생성합니다.
+func NewCrawler(clickDelay time.Duration, limit int, overallTimeout time.Duration) *Crawler {
+	if limit < 0 {
+		limit = 0
+	}
+	if clickDelay < 0 {
+		clickDelay = 0
+	}
+	if overallTimeout < 0 {
+		overallTimeout = 0
+	}
+	return &Crawler{
+		ClickDelay:     clickDelay,
+		Limit:          limit,
+		OverallTimeout: overallTimeout,
+	}
+}
+
+// Run은 Crawler에 저장된 설정을 사용하여 크롤링을 수행하고 결과를 outPath에 저장합니다.
+func (c *Crawler) Run(headless bool, outPath, format string, startURL string) error {
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Flag("headless", headless),
 		chromedp.Flag("disable-gpu", true),
@@ -42,14 +67,14 @@ func Run(headless bool, outPath, format string, clickDelay time.Duration, limit 
 	ctx, cancel := chromedp.NewContext(ctx)
 	defer cancel()
 
-	if overallTimeout > 0 {
+	if c.OverallTimeout > 0 {
 		var toCancel context.CancelFunc
-		ctx, toCancel = context.WithTimeout(ctx, overallTimeout)
+		ctx, toCancel = context.WithTimeout(ctx, c.OverallTimeout)
 		defer toCancel()
 	}
 
 	// Navigate to start URL
-	if err := chromedp.Run(ctx, chromedp.Navigate(StartURL)); err != nil {
+	if err := chromedp.Run(ctx, chromedp.Navigate(startURL)); err != nil {
 		return err
 	}
 	if err := waitVisible(ctx, navContainerSel, 30*time.Second); err != nil {
@@ -79,7 +104,7 @@ func Run(headless bool, outPath, format string, clickDelay time.Duration, limit 
 				if err := chromedp.Run(ctx, chromedp.MouseClickNode(n)); err != nil {
 					continue
 				}
-				time.Sleep(clickDelay)
+				time.Sleep(c.ClickDelay)
 				expanded = true
 			}
 		}
@@ -122,7 +147,7 @@ func Run(headless bool, outPath, format string, clickDelay time.Duration, limit 
 		if err := chromedp.Run(ctx, chromedp.MouseClickNode(n)); err != nil {
 			continue
 		}
-		time.Sleep(clickDelay)
+		time.Sleep(c.ClickDelay)
 
 		// 문서 URL 판별
 		var curURL string
@@ -155,7 +180,7 @@ func Run(headless bool, outPath, format string, clickDelay time.Duration, limit 
 		}
 
 		if !isAllowedDocURL(curURL) {
-			_ = chromedp.Run(ctx, chromedp.Navigate(StartURL))
+			_ = chromedp.Run(ctx, chromedp.Navigate(startURL))
 			_ = waitVisible(ctx, navContainerSel, 15*time.Second)
 			continue
 		}
@@ -176,7 +201,7 @@ func Run(headless bool, outPath, format string, clickDelay time.Duration, limit 
 		visited[postID] = true
 		logger.LogParsedDoc(nil, doc.PostID, doc.Title, doc.URL)
 
-		if limit > 0 && len(visited) >= limit {
+		if c.Limit > 0 && len(visited) >= c.Limit {
 			break
 		}
 	}
@@ -187,6 +212,10 @@ func Run(headless bool, outPath, format string, clickDelay time.Duration, limit 
 	}
 	return nil
 }
+
+// Run executes the crawl with the provided configuration and writes results to outPath.
+// Deprecated: use (*Crawler).Run with NewCrawler(clickDelay, limit, overallTimeout).
+// Note: deprecated Run wrapper has been removed. Use NewCrawler(...).Run(...) instead.
 
 func waitVisible(ctx context.Context, sel string, timeout time.Duration) error {
 	c, cancel := context.WithTimeout(ctx, timeout)

@@ -13,12 +13,13 @@ import (
 
 func main() {
 	var (
-		out     string
-		format  string
-		head    bool
-		delay   time.Duration
-		limit   int
-		timeout time.Duration
+		out      string
+		format   string
+		head     bool
+		delay    time.Duration
+		limit    int
+		timeout  time.Duration
+		startURL string
 	)
 
 	flag.StringVar(&out, "out", "docs.json", "output file path")
@@ -27,13 +28,15 @@ func main() {
 	flag.DurationVar(&delay, "delay", 150*time.Millisecond, "delay between clicks")
 	flag.IntVar(&limit, "limit", 0, "max number of documents to crawl (0 = no limit)")
 	flag.DurationVar(&timeout, "timeout", 120*time.Second, "overall timeout for crawling")
+	flag.StringVar(&startURL, "start-url", crawler.StartURL, "start URL to begin crawling")
 	flag.Parse()
 
 	// Configure default slog logger (text to stderr, Info level)
 	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
 	slog.SetDefault(slog.New(handler))
 
-	if err := crawler.Run(head, out, strings.ToLower(format), delay, limit, timeout); err != nil {
+	c := crawler.NewCrawler(delay, limit, timeout)
+	if err := c.Run(head, out, strings.ToLower(format), startURL); err != nil {
 		log.Fatalf("crawler error: %v", err)
 	}
 }
