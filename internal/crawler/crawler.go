@@ -32,30 +32,54 @@ type Crawler struct {
 	ClickDelay     time.Duration
 	Limit          int
 	OverallTimeout time.Duration
+	Headless       bool
 }
 
-// NewCrawler는 주어진 설정으로 Crawler 인스턴스를 생성합니다.
-func NewCrawler(clickDelay time.Duration, limit int, overallTimeout time.Duration) *Crawler {
-	if limit < 0 {
-		limit = 0
+// Functional Options for Crawler
+type Option func(*Crawler)
+
+// WithClickDelay sets the delay between clicks. Negative values are clamped to 0.
+func WithClickDelay(d time.Duration) Option {
+	if d < 0 {
+		d = 0
 	}
-	if clickDelay < 0 {
-		clickDelay = 0
+	return func(c *Crawler) { c.ClickDelay = d }
+}
+
+// WithLimit sets the maximum number of documents to crawl. Negative values become 0 (no limit).
+func WithLimit(n int) Option {
+	if n < 0 {
+		n = 0
 	}
-	if overallTimeout < 0 {
-		overallTimeout = 0
+	return func(c *Crawler) { c.Limit = n }
+}
+
+// WithOverallTimeout sets the overall crawling timeout. Negative values are clamped to 0 (no timeout).
+func WithOverallTimeout(d time.Duration) Option {
+	if d < 0 {
+		d = 0
 	}
-	return &Crawler{
-		ClickDelay:     clickDelay,
-		Limit:          limit,
-		OverallTimeout: overallTimeout,
+	return func(c *Crawler) { c.OverallTimeout = d }
+}
+
+// WithHeadless sets whether to run Chrome in headless mode.
+func WithHeadless(b bool) Option { return func(c *Crawler) { c.Headless = b } }
+
+// NewCrawler는 Functional Option으로 구성된 Crawler 인스턴스를 생성합니다.
+func NewCrawler(opts ...Option) *Crawler {
+	c := &Crawler{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(c)
+		}
 	}
+	return c
 }
 
 // Run은 Crawler에 저장된 설정을 사용하여 크롤링을 수행하고 결과를 outPath에 저장합니다.
-func (c *Crawler) Run(headless bool, outPath, format string, startURL string) error {
+func (c *Crawler) Run(outPath, format string, startURL string) error {
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", headless),
+		chromedp.Flag("headless", c.Headless),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("ignore-certificate-errors", true),
 		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"),

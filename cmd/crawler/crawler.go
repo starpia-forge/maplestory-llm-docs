@@ -35,8 +35,13 @@ func main() {
 	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
 	slog.SetDefault(slog.New(handler))
 
-	c := crawler.NewCrawler(delay, limit, timeout)
-	if err := c.Run(head, out, strings.ToLower(format), startURL); err != nil {
+	c := crawler.NewCrawler(
+		crawler.WithClickDelay(delay),
+		crawler.WithLimit(limit),
+		crawler.WithOverallTimeout(timeout),
+		crawler.WithHeadless(head),
+	)
+	if err := c.Run(out, strings.ToLower(format), startURL); err != nil {
 		log.Fatalf("crawler error: %v", err)
 	}
 }
