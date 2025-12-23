@@ -15,9 +15,6 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// StartURL is the default initial page to begin crawling.
-const StartURL = "https://maplestoryworlds-creators.nexon.com/ko/docs/?postId=472"
-
 const (
 	navContainerSel = "#App > main > div.contents_wrap > div.tree_view_container"
 	// contentOuterSel targets the container div used when opening curURL in a separate context
