@@ -2,22 +2,26 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"io"
 	"log"
 	"log/slog"
 	"os"
+	"os/exec"
 	"time"
 
 	"maplestory-world-llms-txt/internal/crawler"
 )
 
-const (
-	ReferenceDocumentKR = "https://maplestoryworlds-creators.nexon.com/ko/docs/?postId=472"
-	ReferenceDocumentEN = "https://maplestoryworlds-creators.nexon.com/en/docs/?postId=472"
-)
-
-const (
-	APIDocumentKR = ""
-	APIDocumentEN = ""
+var (
+	targets = map[string]string{
+		/* Reference docs */
+		"https://maplestoryworlds-creators.nexon.com/ko/docs/?postId=472": "docs/kr/reference.md",
+		"https://maplestoryworlds-creators.nexon.com/en/docs/?postId=472": "docs/en/reference.md",
+		/* API docs */
+		"https://maplestoryworlds-creators.nexon.com/ko/apiReference/How-to-use-API-Reference": "docs/kr/api.md",
+		"https://maplestoryworlds-creators.nexon.com/en/apiReference/How-to-use-API-Reference": "docs/en/api.md",
+	}
 )
 
 func main() {
@@ -45,12 +49,46 @@ func main() {
 		crawler.WithHeadless(head),
 	)
 
-	docs, err := c.Run(ReferenceDocumentKR)
-	if err != nil {
-		log.Fatalf("crawler error: %v", err)
-	}
+	for targetURL, outFileName := range targets {
+		docs, err := c.Run(targetURL)
+		if err != nil {
+			log.Fatalf("crawler error: %v", err)
+		}
+		log.Printf("crawled %d documents from %q", len(docs), targetURL)
 
-	if err := crawler.SaveDocumentFile(docs, "docs/kr/reference.raw.txt"); err != nil {
-		log.Fatalf("SaveDocumentFile error: %v", err)
+		rawFileName := fmt.Sprintf("%s.raw", outFileName)
+		if err := crawler.SaveDocumentFile(docs, rawFileName); err != nil {
+			log.Fatalf("SaveDocumentFile error: %v", err)
+		}
+		log.Printf("document to %s", rawFileName)
+
+		if err := mdream(rawFileName, outFileName); err != nil {
+			log.Fatalf("mdream error: %v", err)
+		}
+		log.Printf("converted to %s", outFileName)
 	}
+}
+
+func mdream(inputFileName, outFileName string) error {
+	inputFile, err := os.Open(inputFileName)
+	if err != nil {
+		return err
+	}
+	defer inputFile.Close()
+
+	outputFile, err := os.Create(outFileName)
+	if err != nil {
+		return err
+	}
+	defer outputFile.Close()
+
+	cmd := exec.Command("npx", "mdream", "--preset", "minimal")
+	cmd.Stdin = inputFile
+	cmd.Stdout = io.Writer(outputFile)
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
 }
