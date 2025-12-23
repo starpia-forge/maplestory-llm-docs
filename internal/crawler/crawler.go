@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"maplestory-llm-docs/internal/logger"
+	"maplestory-world-llms-txt/internal/logger"
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/dom"

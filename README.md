@@ -1,4 +1,4 @@
-# MapleStory World LLM Docs
+# MapleStory World - llms.txt
 
 ## Overview
 

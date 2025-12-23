@@ -1,4 +1,4 @@
-module maplestory-llm-docs
+module maplestory-world-llms-txt
 
 go 1.25
 

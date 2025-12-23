@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"maplestory-llm-docs/internal/crawler"
+	"maplestory-world-llms-txt/internal/crawler"
 )
 
 func main() {
