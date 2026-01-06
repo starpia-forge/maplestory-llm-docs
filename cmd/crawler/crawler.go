@@ -69,13 +69,28 @@ func main() {
 			log.Fatalf("SaveDocumentFile error: %v", err)
 		}
 
-		// Concatenate all generated HTML fragments into a single file for mdream
-		htmlFileName := fmt.Sprintf("%s.html", outFileName)
-		outF, err := os.OpenFile(htmlFileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+		// Convert each HTML fragment to Markdown individually via mdream
+		mdTmpDir, err := os.MkdirTemp("", "md_parts_*")
 		if err != nil {
-			log.Fatalf("open %s: %v", htmlFileName, err)
+			log.Fatalf("create temp md dir: %v", err)
 		}
+		defer os.RemoveAll(mdTmpDir)
+
+		mdParts := make([]string, 0, len(paths))
 		for i, p := range paths {
+			partOut := filepath.Join(mdTmpDir, fmt.Sprintf("%03d_%s", i, filepath.Base(outFileName)))
+			if err := mdream(p, partOut); err != nil {
+				log.Fatalf("mdream error for %s: %v", p, err)
+			}
+			mdParts = append(mdParts, partOut)
+		}
+
+		// Concatenate all generated Markdown parts into the final output file
+		outF, err := os.OpenFile(outFileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+		if err != nil {
+			log.Fatalf("open %s: %v", outFileName, err)
+		}
+		for i, p := range mdParts {
 			inF, err := os.Open(p)
 			if err != nil {
 				_ = outF.Close()
@@ -88,7 +103,7 @@ func main() {
 			}
 			_ = inF.Close()
 			// Separate documents with a newline to preserve previous behavior
-			if i < len(paths)-1 {
+			if i < len(mdParts)-1 {
 				if _, err := outF.WriteString("\n"); err != nil {
 					_ = outF.Close()
 					log.Fatalf("write newline: %v", err)
@@ -96,14 +111,9 @@ func main() {
 			}
 		}
 		if err := outF.Close(); err != nil {
-			log.Fatalf("close %s: %v", htmlFileName, err)
+			log.Fatalf("close %s: %v", outFileName, err)
 		}
-		log.Printf("wrote concatenated document to %s (from %d parts in %s)", htmlFileName, len(paths), filepath.Base(tmpDir))
-
-		if err := mdream(htmlFileName, outFileName); err != nil {
-			log.Fatalf("mdream error: %v", err)
-		}
-		log.Printf("converted to %s", outFileName)
+		log.Printf("wrote concatenated markdown to %s (from %d parts in %s)", outFileName, len(mdParts), filepath.Base(mdTmpDir))
 	}
 }
 func mdream(inputFileName, outFileName string) error {
