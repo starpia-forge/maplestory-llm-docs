@@ -207,14 +207,15 @@ func (c *Crawler) Run(url string) ([]Document, error) {
 			continue
 		}
 
-		// Fetch innerHTML in a separate context (per requirement)
+		// Fetch innerHTML from current page (no new context)
 		var innerHTML string
 		_ = withRetry(backoff, 3, func() error {
-			ih, e := fetchInnerHTMLWithNewContext(ctx, curURL, 30*time.Second)
-			if e != nil {
-				return e
+			if err := chromedp.Run(ctx, chromedp.InnerHTML(contentOuterSel, &innerHTML, chromedp.ByQuery)); err != nil {
+				return err
 			}
-			innerHTML = ih
+			if strings.TrimSpace(innerHTML) == "" {
+				return errors.New("empty innerHTML")
+			}
 			return nil
 		})
 
