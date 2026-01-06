@@ -286,10 +286,7 @@ func isAllowedDocURL(raw string) bool {
 	if !strings.HasSuffix(u.Hostname(), "nexon.com") {
 		return false
 	}
-	if !strings.Contains(u.Path, "/docs") || !strings.Contains(u.Path, "/apiReference") {
-		return false
-	}
-	return true
+	return strings.Contains(u.Path, "/docs") || strings.Contains(u.Path, "/apiReference")
 }
 
 func saveOutput(path, format string, docs []Document) error {
