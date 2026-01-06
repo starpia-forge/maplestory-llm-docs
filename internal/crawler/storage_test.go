@@ -11,8 +11,8 @@ import (
 
 func sampleDocs() []Document {
 	return []Document{
-		{PostID: "1", Title: "Hello", URL: "https://example.com?a=1", Content: "Line1\nLine2"},
-		{PostID: "2", Title: "World, CSV", URL: "https://example.com?a=2", Content: "Comma, inside"},
+		{Title: "Hello", URL: "https://example.com?a=1", Content: "Line1\nLine2"},
+		{Title: "World, CSV", URL: "https://example.com?a=2", Content: "Comma, inside"},
 	}
 }
 
@@ -55,8 +55,11 @@ func TestEncodeCSV_AndReadBack(t *testing.T) {
 	if len(rows) != 3 {
 		t.Fatalf("expected 3 rows (header + 2), got %d", len(rows))
 	}
-	if rows[0][0] != "postId" || rows[1][1] != "Hello" || rows[2][1] != "World, CSV" {
-		t.Fatalf("unexpected rows: %+v", rows)
+	if rows[0][0] != "title" || rows[0][1] != "url" || rows[0][2] != "content" {
+		t.Fatalf("unexpected header: %+v", rows[0])
+	}
+	if rows[1][0] != "Hello" || rows[2][0] != "World, CSV" {
+		t.Fatalf("unexpected data rows: %+v", rows[1:])
 	}
 }
 

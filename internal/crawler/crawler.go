@@ -175,8 +175,7 @@ func (c *Crawler) Run(url string) ([]Document, error) {
 		// Determine document URL
 		var curURL string
 		_ = chromedp.Run(ctx, chromedp.Location(&curURL))
-		postID, ok := ExtractPostIDFromURL(curURL)
-		if !ok || visited[postID] {
+		if curURL == "" || visited[curURL] {
 			continue
 		}
 
@@ -219,10 +218,10 @@ func (c *Crawler) Run(url string) ([]Document, error) {
 			return nil
 		})
 
-		doc := Document{PostID: postID, Title: title, URL: curURL, InnerHTML: innerHTML, Content: ""}
+		doc := Document{Title: title, URL: curURL, InnerHTML: innerHTML, Content: ""}
 		docs = append(docs, doc)
-		visited[postID] = true
-		logger.LogParsedDoc(nil, doc.PostID, doc.Title, doc.URL)
+		visited[curURL] = true
+		logger.LogParsedDoc(nil, "", doc.Title, doc.URL)
 
 		if c.Limit > 0 && len(visited) >= c.Limit {
 			break

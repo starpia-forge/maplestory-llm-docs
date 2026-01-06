@@ -26,11 +26,11 @@ func EncodeCSV(docs []Document) ([]byte, error) {
 	var buf bytes.Buffer
 	w := csv.NewWriter(&buf)
 	// header
-	if err := w.Write([]string{"postId", "title", "url", "content"}); err != nil {
+	if err := w.Write([]string{"title", "url", "content"}); err != nil {
 		return nil, err
 	}
 	for _, d := range docs {
-		if err := w.Write([]string{d.PostID, d.Title, d.URL, d.Content}); err != nil {
+		if err := w.Write([]string{d.Title, d.URL, d.Content}); err != nil {
 			return nil, err
 		}
 	}
