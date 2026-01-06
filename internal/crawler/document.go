@@ -1,9 +1,9 @@
 package crawler
 
 import (
-	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 // Document represents a crawled document item.
@@ -14,27 +14,26 @@ type Document struct {
 	Content   string `json:"content"`
 }
 
-// SaveDocumentFile creates/overwrites outFile and writes each Document.InnerHTML
-// followed by a newline, streaming via a buffered writer to avoid excessive memory use.
-func SaveDocumentFile(docs []Document, outFile string) error {
-	f, err := os.OpenFile(outFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
-	if err != nil {
-		return fmt.Errorf("open %s: %w", outFile, err)
-	}
-	defer func() { _ = f.Close() }()
-
-	// Use a reasonably large buffer to reduce syscalls but keep memory bounded.
-	w := bufio.NewWriterSize(f, 64*1024)
+// SaveDocumentFile writes each Document.InnerHTML into a separate file under outFileDir.
+// Files are named using the slice index: "<index>_doc.html". It returns the full paths
+// of the created files in the same order as docs.
+func SaveDocumentFile(docs []Document, outFileDir string) ([]string, error) {
+	paths := make([]string, 0, len(docs))
 	for i := range docs {
-		if _, err := w.WriteString(docs[i].InnerHTML); err != nil {
-			return fmt.Errorf("write innerHTML: %w", err)
+		name := fmt.Sprintf("%d_doc.html", i)
+		p := filepath.Join(outFileDir, name)
+		f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+		if err != nil {
+			return nil, fmt.Errorf("open %s: %w", p, err)
 		}
-		if err := w.WriteByte('\n'); err != nil {
-			return fmt.Errorf("write newline: %w", err)
+		if _, err := f.WriteString(docs[i].InnerHTML); err != nil {
+			_ = f.Close()
+			return nil, fmt.Errorf("write innerHTML: %w", err)
 		}
+		if err := f.Close(); err != nil {
+			return nil, fmt.Errorf("close file: %w", err)
+		}
+		paths = append(paths, p)
 	}
-	if err := w.Flush(); err != nil {
-		return fmt.Errorf("flush: %w", err)
-	}
-	return nil
+	return paths, nil
 }

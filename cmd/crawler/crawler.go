@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"maplestory-world-llms-txt/internal/crawler"
@@ -56,11 +57,48 @@ func main() {
 		}
 		log.Printf("crawled %d documents from %q", len(docs), targetURL)
 
-		htmlFileName := fmt.Sprintf("%s.html", outFileName)
-		if err := crawler.SaveDocumentFile(docs, htmlFileName); err != nil {
+		// Create temp dir to store individual HTML doc files
+		tmpDir, err := os.MkdirTemp("", "crawler_docs_*")
+		if err != nil {
+			log.Fatalf("create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		paths, err := crawler.SaveDocumentFile(docs, tmpDir)
+		if err != nil {
 			log.Fatalf("SaveDocumentFile error: %v", err)
 		}
-		log.Printf("document to %s", htmlFileName)
+
+		// Concatenate all generated HTML fragments into a single file for mdream
+		htmlFileName := fmt.Sprintf("%s.html", outFileName)
+		outF, err := os.OpenFile(htmlFileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+		if err != nil {
+			log.Fatalf("open %s: %v", htmlFileName, err)
+		}
+		for i, p := range paths {
+			inF, err := os.Open(p)
+			if err != nil {
+				_ = outF.Close()
+				log.Fatalf("open %s: %v", p, err)
+			}
+			if _, err := io.Copy(outF, inF); err != nil {
+				_ = inF.Close()
+				_ = outF.Close()
+				log.Fatalf("copy from %s: %v", p, err)
+			}
+			_ = inF.Close()
+			// Separate documents with a newline to preserve previous behavior
+			if i < len(paths)-1 {
+				if _, err := outF.WriteString("\n"); err != nil {
+					_ = outF.Close()
+					log.Fatalf("write newline: %v", err)
+				}
+			}
+		}
+		if err := outF.Close(); err != nil {
+			log.Fatalf("close %s: %v", htmlFileName, err)
+		}
+		log.Printf("wrote concatenated document to %s (from %d parts in %s)", htmlFileName, len(paths), filepath.Base(tmpDir))
 
 		if err := mdream(htmlFileName, outFileName); err != nil {
 			log.Fatalf("mdream error: %v", err)
