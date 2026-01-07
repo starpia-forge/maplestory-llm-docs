@@ -135,23 +135,95 @@ func (c *Crawler) Run(url string) ([]Document, error) {
 		}
 	}
 
-	// 2) Build list of target elements' Full XPaths (from expanded tree)
-	xPaths, err := collectLeafXPaths(ctx)
-	if err != nil {
-		return []Document{}, fmt.Errorf("collect xPaths: %w", err)
+	// 2) Phase A - Collect clickable target elements' Full XPaths based on existing conditions
+	_ = scrollMenuToEnd(ctx)
+	// Enumerate leaf nodes and compute an XPath for each node individually.
+	var leafNodes []*cdp.Node
+	if err := chromedp.Run(ctx, chromedp.Nodes(navContainerSel+" div.inactiveDepth", &leafNodes, chromedp.ByQueryAll)); err != nil {
+		return []Document{}, fmt.Errorf("query leaf nodes: %w", err)
 	}
 
-	// 3) Iterate over collected XPaths and collect content per requirement
-	for _, xPath := range xPaths {
-		// Navigate to start URL anew
-		if err := chromedp.Run(ctx, chromedp.Navigate(url)); err != nil {
-			continue
-		}
-		if err := waitVisible(ctx, navContainerSel, 30*time.Second); err != nil {
+	seen := make(map[string]struct{})
+	var targets []string
+
+	for i, n := range leafNodes {
+		// Skip active parents
+		if hasClass(n, "activeParent") {
 			continue
 		}
 
-		// Expand all nodes again (same logic as phase 1)
+		// Check for visible text by inspecting outerHTML (matches original logic)
+		hasText := false
+		_ = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+			html, err := dom.GetOuterHTML().WithNodeID(n.NodeID).Do(ctx)
+			if err != nil {
+				return err
+			}
+			if hasAnyTextInHTML(html) {
+				hasText = true
+			}
+			return nil
+		}))
+		if !hasText {
+			continue
+		}
+
+		// Mark the element with a temporary unique attribute so we can reference it in page JS
+		uid := fmt.Sprintf("crawl-uid-%d-%d", time.Now().UnixNano(), i)
+		if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+			return dom.SetAttributeValue(n.NodeID, "data-crawl-uid", uid).Do(ctx)
+		})); err != nil {
+			continue
+		}
+
+		// Compute absolute XPath for this element using in-page JS
+		var xpath string
+		js := fmt.Sprintf(`(function(){
+		  var el = document.querySelector('[data-crawl-uid="%s"]');
+		  if (!el) return '';
+		  function indexAmongSiblings(e){
+		    var i=1, sib=e.previousElementSibling; 
+		    while(sib){ if(sib.tagName===e.tagName) i++; sib=sib.previousElementSibling; }
+		    return i;
+		  }
+		  var parts=[]; 
+		  for (var cur=el; cur && cur.nodeType===Node.ELEMENT_NODE; cur=cur.parentElement){
+		    parts.push('/'+cur.tagName.toLowerCase()+'['+indexAmongSiblings(cur)+']');
+		  }
+		  return parts.reverse().join('') || '/';
+		})()`, uid)
+		_ = chromedp.Run(ctx, chromedp.Evaluate(js, &xpath))
+
+		// Clean up the temporary attribute
+		_ = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+			// RemoveAttribute may fail; fallback by setting empty value
+			if err := dom.RemoveAttribute(n.NodeID, "data-crawl-uid").Do(ctx); err != nil {
+				_ = dom.SetAttributeValue(n.NodeID, "data-crawl-uid", "").Do(ctx)
+			}
+			return nil
+		}))
+
+		xpath = strings.TrimSpace(xpath)
+		if xpath == "" {
+			continue
+		}
+		if _, dup := seen[xpath]; dup {
+			continue
+		}
+		seen[xpath] = struct{}{}
+		targets = append(targets, xpath)
+	}
+
+	// 3) Phase B - For each collected XPath: revisit, expand, click by XPath, and collect content
+	// Navigate to start URL again
+	if err := chromedp.Run(ctx, chromedp.Navigate(url)); err != nil {
+		return []Document{}, err
+	}
+	if err := waitVisible(ctx, navContainerSel, 30*time.Second); err != nil {
+		return []Document{}, fmt.Errorf("navigation container not visible: %w", err)
+	}
+	for _, xp := range targets {
+		// Re-run expansion phase so that target element exists in DOM
 		for {
 			_ = scrollMenuToEnd(ctx)
 			var nodes []*cdp.Node
@@ -176,9 +248,8 @@ func (c *Crawler) Run(url string) ([]Document, error) {
 			}
 		}
 
-		// Find the node by XPath and click it (via JS)
-		ok, _ := clickByXPathJS(ctx, xPath)
-		if !ok {
+		// Click target by XPath
+		if err := clickByXPath(ctx, xp); err != nil {
 			continue
 		}
 		time.Sleep(c.ClickDelay)
@@ -192,21 +263,20 @@ func (c *Crawler) Run(url string) ([]Document, error) {
 
 		// Collect content (with backoff)
 		var title string
-		err := withRetry(backoff, 5, func() error {
+		if err := withRetry(backoff, 5, func() error {
 			if err := waitVisible(ctx, contentContainerSel, 30*time.Second); err != nil {
 				return err
 			}
 			if err := waitVisible(ctx, titleSel, 10*time.Second); err != nil {
 				return err
 			}
-			var tt string
-			if err := chromedp.Run(ctx, chromedp.Text(titleSel, &tt, chromedp.NodeVisible, chromedp.ByQuery)); err != nil {
+			var t string
+			if err := chromedp.Run(ctx, chromedp.Text(titleSel, &t, chromedp.NodeVisible, chromedp.ByQuery)); err != nil {
 				return err
 			}
-			title = strings.TrimSpace(tt)
+			title = strings.TrimSpace(t)
 			return nil
-		})
-		if err != nil {
+		}); err != nil {
 			continue
 		}
 
@@ -308,4 +378,30 @@ func saveOutput(path, format string, docs []Document) error {
 	default:
 		return fmt.Errorf("unknown format: %s", format)
 	}
+}
+
+// clickByXPath finds an element via the given absolute XPath and clicks it in page context.
+func clickByXPath(ctx context.Context, xpath string) error {
+	if strings.TrimSpace(xpath) == "" {
+		return errors.New("empty xpath")
+	}
+	js := fmt.Sprintf(`(function(xp){
+	  var res = document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+	  var el = res && res.singleNodeValue;
+	  if (!el) return false;
+	  if (el.scrollIntoView) try { el.scrollIntoView({block:'center'}); } catch(e) { el.scrollIntoView(); }
+	  if (el.click) { el.click(); return true; }
+	  var ev = document.createEvent('MouseEvents');
+	  ev.initEvent('click', true, true);
+	  el.dispatchEvent(ev);
+	  return true;
+	})(%q)`, xpath)
+	var ok bool
+	if err := chromedp.Run(ctx, chromedp.Evaluate(js, &ok)); err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("failed to click by xpath")
+	}
+	return nil
 }
