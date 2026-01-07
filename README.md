@@ -21,6 +21,8 @@ The documents in this repository will be available for use in the dedicated AI a
 |:-------------------------------|:--------------|:--------------------------------------------------------------------------------------------|
 | **MapleStory World (English)** | ChatGPT (GPT) | [Link](https://chatgpt.com/g/g-695e6db3552c8191b144ce3dc0330fbe-maplestory-worlds-english)  |
 | **MapleStory World (한국어)**     | ChatGPT (GPT) | [Link](https://chatgpt.com/g/g-695e699ceb2081918f7f8af416c400d0-maplestory-worlds-hangugeo) |
+| **MapleStory World (English)** | Gemini (Gem)  | [Link](https://gemini.google.com/gem/1caJ2qcMSVN9dqXzZe4ZmiaeTi4I-wHIt?usp=sharing)         |
+| **MapleStory World (한국어)**     | Gemini (Gem)  | [Link](https://gemini.google.com/gem/1jqgVVITwYqZ7A99Wdsn6zJiCWLy12_dn?usp=sharing)         |
 
 ## License
 
