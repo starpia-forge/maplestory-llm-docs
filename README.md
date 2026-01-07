@@ -17,10 +17,10 @@ to the [Documents](#documents) section.
 
 The documents in this repository will be available for use in the dedicated AI agents below.
 
-| Assistant            | Platform      | Link       |
-|:---------------------|:--------------|:-----------|
-| **MapleStory World** | ChatGPT (GPT) | [Link](링크) |
-| **MapleStory World** | Gemini (Gem)  | [Link](링크) |
+| Assistant                      | Platform      | Link                                                                                        |
+|:-------------------------------|:--------------|:--------------------------------------------------------------------------------------------|
+| **MapleStory World (English)** | ChatGPT (GPT) | [Link](https://chatgpt.com/g/g-695e6db3552c8191b144ce3dc0330fbe-maplestory-worlds-english)  |
+| **MapleStory World (한국어)**     | ChatGPT (GPT) | [Link](https://chatgpt.com/g/g-695e699ceb2081918f7f8af416c400d0-maplestory-worlds-hangugeo) |
 
 ## License
 
